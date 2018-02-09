@@ -1,0 +1,127 @@
+// to use by HeDa_Track Inspector
+desc:Track Inspector
+
+slider1:0<0,1,0.000001>Max Peak left
+slider2:0<0,1,0.000001>Max Peak right
+slider3:3<0,1000,0.1>Peak hold (s) (user input)
+slider4:0<0,1,0.000001>WFL
+slider5:0<0,1,0.000001>WFR
+slider6:0<-144,3,0.1>RMS L(dB)
+slider7:0<-144,3,0.1>RMS R(dB)
+slider8:300<5,5000,1.0>RMS Window (ms) (user input)
+slider9:0<0,1,0.000001>Amp Left
+slider10:0<0,1,0.000001>Amp Right
+slider11:0.0500<0,0.15,0.0001>Peaks (s) (user input)
+
+@init
+// change these if you like 
+RMS_MS = slider8;
+decay = exp(-1.0/(RMS_MS*srate*0.001));
+DB_LO = -144.0;
+buf = 0;
+buflen = (RMS_MS*srate*0.001)|0;
+memset(p, 0, 2*buflen);
+pos = 0;
+
+peak0 = peak1 = 0.0;
+sumsq0 = sumsq1 = 0.0;
+peakdb0 = peakdb1 = rmsdb0 = rmsdb1 = DB_LO;
+
+dyn = sumdyn = meandyn = 0.0;
+ndyn = 0;
+
+
+@block
+//RMS (code from Dynamic Range Meter)
+peak0 <= 0.0 ? peakdb0 = DB_LO : peakdb0 = 8.6562*log(peak0);
+rms = sqrt(sumsq0/buflen);
+rms == 0.0 ? rmsdb0 = DB_LO : rmsdb0 = 8.6562*log(rms);
+
+peak1 <= 0.0 ? peakdb1 = DB_LO : peakdb1 = 8.6562*log(peak1);
+rms = sqrt(sumsq1/buflen);
+rms == 0.0 ? rmsdb1 = DB_LO : rmsdb1 = 8.6562*log(rms);
+
+dyn = 0.5*(peakdb0+peakdb1-rmsdb0-rmsdb1);
+dyn < 0.0 ? dyn = 0.0;
+
+ndyn = ndyn+1;
+sumdyn = sumdyn+dyn;
+meandyn = sumdyn/ndyn;
+
+slider6 = rmsdb0;
+slider7 = rmsdb1;
+
+@slider
+RMS_MS = slider8;
+decay = exp(-1.0/(RMS_MS*srate*0.001));
+buf = 0;
+buflen = (RMS_MS*srate*0.001)|0;
+memset(p, 0, 2*buflen);
+pos = 0;
+peak0 = peak1 = 0.0;
+sumsq0 = sumsq1 = 0.0;
+peakdb0 = peakdb1 = rmsdb0 = rmsdb1 = DB_LO;
+
+dyn = sumdyn = meandyn = 0.0;
+ndyn = 0;
+
+@sample
+    ampL = abs(spl0);
+    ampR = abs(spl1);
+    
+    time_precise()-tlp > slider3 ? ( 
+        peakL = 0;
+        peakR = 0;
+        tlp=time_precise();
+    );
+    peakL = max(peakL, ampL);
+    peakR = max(peakR, ampR);
+    
+    time_precise()-tlw > 0.02 ? ( 
+            SL = 0;
+            SR = 0;
+            tlw=time_precise();
+    );
+    SL = max(SL, ampL);
+    SR = max(SR, ampR);
+    
+    time_precise()-tlw2 > slider11 ? ( 
+                ampLpeak = 0;
+                ampRpeak = 0;
+                tlw2=time_precise();
+    );
+    ampLpeak = max(ampLpeak, ampL);
+    ampRpeak = max(ampRpeak, ampR);
+                
+    slider1 = peakL;
+    slider2 = peakR;
+    slider4 = SL;
+    slider5 = SR;
+
+  slider9 = ampLpeak;
+  slider10 = ampRpeak;
+
+RMS_MS = slider8;
+//RMS (code from Dynamic Range Meter)
+new = abs(spl0);
+new > peak0 ? peak0 = new : peak0 = peak0*decay;
+newsq = new*new;
+oldsq = buf[pos];
+buf[pos] = newsq;
+sumsq0 = sumsq0+newsq-oldsq;
+pos = pos+1;
+
+new = abs(spl1);
+new > peak1 ? peak1 = new : peak1 = peak1*decay;
+newsq = new*new;
+oldsq = buf[pos];
+buf[pos] = newsq;
+sumsq1 = sumsq1+newsq-oldsq;
+pos = pos+1;
+
+pos == 2*buflen ? pos = 0;
+  
+  
+
+
+   
